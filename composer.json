@@ -1,6 +1,6 @@
 {
     "name": "moment/moment",
-    "description": "Parse, validate, manipulate, and display dates in javascript.",
+    "description": "Parse, validate, manipulate, and display dates in JavaScript.",
     "keywords": [
         "moment",
         "date",
@@ -22,9 +22,11 @@
     "extra": {
         "component": {
             "scripts": [
-                "moment.js",
-                "language-loader.js",
-                "lang/*.js"
+                "moment.js"
+            ],
+            "files": [
+               "min/*.js",
+               "locale/*.js"
             ]
         }
     }

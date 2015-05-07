@@ -1,45 +1,16 @@
 module.exports = function (grunt) {
-    var embedOption = grunt.option('embedLanguages'),
-        embedLanguageDest = embedOption ?
-            'min/moment-with-customlangs.js' :
-            'min/moment-with-langs.js',
-        embedLanguageLangs = 'lang/*.js';
-
-    if (embedOption && embedOption.match(/,/)) {
-        embedLanguageLangs = 'lang/{' + embedOption + '}.js';
-    }
-    else if (embedOption) {
-        embedLanguageLangs = 'lang/' + embedOption + '.js';
-    }
-
     grunt.initConfig({
         pkg: grunt.file.readJSON('package.json'),
-        concat : {
-            langs: {
-                src: 'lang/*.js',
-                dest: 'min/langs.js'
-            },
-            tests: {
-                src: [
-                    'test/browser-prefix.js',
-                    'test/moment/*.js',
-                    'test/lang/*.js',
-                    'test/browser-suffix.js'
-                ],
-                dest: 'min/tests.js'
-            }
-        },
         env : {
             sauceLabs : (grunt.file.exists('.sauce-labs.creds') ?
                     grunt.file.readJSON('.sauce-labs.creds') : {})
         },
         karma : {
             options: {
-                frameworks: ['nodeunit'],
+                frameworks: ['qunit'],
                 files: [
-                    'min/moment-with-langs.js',
-                    'min/tests.js',
-                    'test/browser.js'
+                    'min/moment-with-locales.js',
+                    'min/tests.js'
                 ],
                 sauceLabs: {
                     startConnect: true,
@@ -87,7 +58,9 @@ module.exports = function (grunt) {
                 browsers: ['Firefox']
             },
             sauce: {
-                options: {reporters: ['dots']},
+                options: {
+                    reporters: ['dots']
+                },
                 singleRun: true,
                 browsers: [
                     'slChromeWinXp',
@@ -98,13 +71,11 @@ module.exports = function (grunt) {
                 ]
             }
         },
-
         uglify : {
-            target: {
+            main: {
                 files: {
-                    'min/moment-with-langs.min.js'       : 'min/moment-with-langs.js',
-                    'min/moment-with-customlangs.min.js' : 'min/moment-with-customlangs.js',
-                    'min/langs.min.js'                   : 'min/langs.js',
+                    'min/moment-with-locales.min.js'     : 'min/moment-with-locales.js',
+                    'min/locales.min.js'                 : 'min/locales.js',
                     'min/moment.min.js'                  : 'moment.js'
                 }
             },
@@ -120,104 +91,98 @@ module.exports = function (grunt) {
                 preserveComments: 'some'
             }
         },
-        nodeunit : {
-            all : ["test/moment/**/*.js", "test/lang/**/*.js"]
-        },
         jshint: {
             all: [
-                "Gruntfile.js", "moment.js", "lang/**/*.js", "test/**/*.js",
-                "!test/browser*.js"
+                'Gruntfile.js',
+                'tasks/**.js',
+                'src/**/*.js'
             ],
             options: {
-                "node"     : true,
-                "browser"  : true,
-                "boss"     : false,
-                "curly"    : true,
-                "debug"    : false,
-                "devel"    : false,
-                "eqeqeq"   : true,
-                "eqnull"   : true,
-                "evil"     : false,
-                "forin"    : false,
-                "immed"    : false,
-                "laxbreak" : false,
-                "newcap"   : true,
-                "noarg"    : true,
-                "noempty"  : false,
-                "nonew"    : false,
-                "onevar"   : true,
-                "plusplus" : false,
-                "regexp"   : false,
-                "undef"    : true,
-                "sub"      : true,
-                "strict"   : false,
-                "white"    : true,
-                "es3"      : true,
-                "camelcase" : true,
-                "globals": {
-                    "define": false
-                }
+                jshintrc: true
             }
         },
         jscs: {
             all: [
-                "Gruntfile.js", "moment.js", "lang/**/*.js",
-                "test/**/*.js", "!test/browser*.js"
+                'Gruntfile.js',
+                'tasks/**.js',
+                'src/**/*.js'
             ],
             options: {
-                config: ".jscs.json"
+                config: '.jscs.json'
             }
         },
         watch : {
             test : {
                 files : [
-                    'moment.js',
-                    'lang/*.js',
-                    'test/**/*.js'
+                    'src/**/*.js'
                 ],
-                tasks: ['nodeunit']
+                tasks: ['test']
             },
             jshint : {
                 files : '<%= jshint.all %>',
                 tasks: ['jshint']
             }
         },
-        embedLanguages: {
-            moment: 'moment.js',
-            dest: embedLanguageDest,
-            targetLangs: embedLanguageLangs
+        benchmark: {
+            all: {
+                src: ['benchmarks/*.js']
+            }
+        },
+        exec: {
+            'meteor-init': {
+                command: [
+                    // Make sure Meteor is installed, per https://meteor.com/install.
+                    // The curl'ed script is safe; takes 2 minutes to read source & check.
+                    'type meteor >/dev/null 2>&1 || { curl https://install.meteor.com/ | sh; }',
+                    // Meteor expects package.js to be in the root directory of
+                    // the checkout, but we already have a package.js for Dojo
+                    'mv package.js package.dojo && cp meteor/package.js .'
+                ].join(';')
+            },
+            'meteor-cleanup': {
+                // remove build files and restore Dojo's package.js
+                command: 'rm -rf ".build.*" versions.json; mv package.dojo package.js'
+            },
+            'meteor-test': {
+                command: 'spacejam --mongo-url mongodb:// test-packages ./'
+            },
+            'meteor-publish': {
+                command: 'meteor publish'
+            }
         }
+
     });
 
-    grunt.loadTasks("tasks");
+    grunt.loadTasks('tasks');
 
     // These plugins provide necessary tasks.
     require('load-grunt-tasks')(grunt);
 
     // Default task.
-    grunt.registerTask('default', ['jshint', 'jscs', 'nodeunit']);
+    grunt.registerTask('default', ['lint', 'test:node']);
+
+    // linting
+    grunt.registerTask('lint', ['jshint', 'jscs']);
 
     // test tasks
-    grunt.registerTask('test', ['test:node', 'test:browser']);
-    grunt.registerTask('test:node', ['nodeunit']);
-    grunt.registerTask('test:server', ['concat', 'embedLanguages', 'karma:server']);
-    grunt.registerTask('test:browser', ['concat', 'embedLanguages', 'karma:chrome', 'karma:firefox']);
-    grunt.registerTask('test:sauce-browser', ['concat', 'embedLanguages', 'env:sauceLabs', 'karma:sauce']);
-    grunt.registerTask('test:travis-sauce-browser', ['concat', 'embedLanguages', 'karma:sauce']);
+    grunt.registerTask('test', ['test:node']);
+    grunt.registerTask('test:node', ['transpile', 'qtest']);
+    // TODO: For some weird reason karma doesn't like the files in
+    // build/umd/min/* but works with min/*, so update-index, then git checkout
+    grunt.registerTask('test:server', ['transpile', 'update-index', 'karma:server']);
+    grunt.registerTask('test:browser', ['transpile', 'update-index', 'karma:chrome', 'karma:firefox']);
+    grunt.registerTask('test:sauce-browser', ['transpile', 'update-index', 'env:sauceLabs', 'karma:sauce']);
+    grunt.registerTask('test:meteor', ['exec:meteor-init', 'exec:meteor-test', 'exec:meteor-cleanup']);
 
     // travis build task
-    grunt.registerTask('build:travis', [
-        // code style
-        'jshint', 'jscs',
-        // node tests
-        'test:node',
-        // sauce tests
-        'check-sauce-creds', 'test:travis-sauce-browser'
-    ]);
+    grunt.registerTask('build:travis', ['default']);
+    grunt.registerTask('meteor-publish', ['exec:meteor-init', 'exec:meteor-publish', 'exec:meteor-cleanup']);
 
     // Task to be run when releasing a new version
     grunt.registerTask('release', [
-        'jshint', 'nodeunit', 'concat', 'embedLanguages',
-        'languageLoader', 'component', 'uglify'
+        'default',
+        'update-index',
+        'component',
+        'uglify:main'
     ]);
 };
